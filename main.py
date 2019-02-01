@@ -6,7 +6,8 @@ import subprocess
 import json
 import time
 import pickle
-
+from datetime import date
+import hashlib 
 ### FUNCTIONS ###
 
 ### DISPLAY TITLE OF APPLICATION ###
@@ -79,7 +80,7 @@ def verify_input_csv(args):
 
 def scan_dir(image_files):
     if os.path.isdir(image_dir_path):
-        extensions = ['.gif', '.jpg', '.bmp','.jpeg']
+        extensions = ['.gif', '.jpg', '.bmp','.jpeg','.tif','.tiff']
         for root, dirs, files in os.walk(image_dir_path):
             for f in files:
                 fullpath = os.path.join(root, f)
@@ -179,12 +180,20 @@ def create_output_csv():
                 if "workable_servers" in metadata_list and "dir" in metadata_list and "files" in metadata_list:
                    uri = uri+metadata_list["workable_servers"][0]
                    uri = uri+metadata_list["dir"]+"/"
+                   fm="image/"
                    for l in metadata_list["files"]:
                        base = os.path.basename(line[1])
                        if l["name"] == base:
+                          name, ext = os.path.splitext(base)
+                          fm=fm+ext.replace(".","")
                           uri = uri+base
-                   temp_entry = [line[0], uri]
+                   hasher = hashlib.md5()
+                   with open(line[1], 'rb') as afile:
+                        buf = afile.read()
+                        hasher.update(buf)       
+                   temp_entry = [line[0], uri,'StillImage',fm,'CC BY',line[1],'md5',hasher.hexdigest(),"{}",'uploaded',date.today()]
                    data.append(temp_entry)
+                   afile.close()
                 else:
                     print("metadata not found for image:-",line[0])
     readFile.close()
