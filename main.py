@@ -167,8 +167,8 @@ def create_output_csv():
             if line[0] != "identifier":
                 uri = "https://"
                 cmd = "ia metadata "+line[0]
-                output = subprocess.check_output(cmd)
-                metadata_list = json.loads(output)
+                output = subprocess.check_output(cmd,shell=True)
+                metadata_list = json.loads(output.decode("utf-8"))
                 count = 0
                 sleep_time = 0
                 while 'workable_servers' not in metadata_list and count < 5:
@@ -176,7 +176,7 @@ def create_output_csv():
                     sleep_time += 2
                     time.sleep(sleep_time)
                     output = subprocess.check_output(cmd)
-                    metadata_list = json.loads(output)
+                    metadata_list = json.loads(output.decode("utf-8"))
                 if "workable_servers" in metadata_list and "dir" in metadata_list and "files" in metadata_list:
                    uri = uri+metadata_list["workable_servers"][0]
                    uri = uri+metadata_list["dir"]+"/"
