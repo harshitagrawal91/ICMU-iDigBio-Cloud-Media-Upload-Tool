@@ -194,7 +194,7 @@ def upload_aws():
         filewriter = csv.writer(outputfile, delimiter=',', lineterminator='\n')
         filewriter.writerows(data)
     outputfile.close()
-
+### UPLOAD FILES TO INTERNET ARCHIVE ###
 def upload_IA():
     cmd = "ia upload --spreadsheet=ia_upload_temp.csv --retries 10"
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
