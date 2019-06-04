@@ -8,6 +8,9 @@ import time
 import pickle
 from datetime import date
 import hashlib 
+import logging 
+import boto3
+import os.path
 ### FUNCTIONS ###
 
 ### DISPLAY TITLE OF APPLICATION ###
@@ -16,9 +19,9 @@ import hashlib
 def display_title_bar():
 
     os.system('cls')
-    print("\t*********************************************")
-    print("\t***            Welcome to IMUI            ***")
-    print("\t*********************************************")
+    logger.info("\t*********************************************")
+    logger.info("\t***            Welcome to IMUI            ***")
+    logger.info("\t*********************************************")
 
 ### VERIFY USERS INPUT ###
 
@@ -29,19 +32,21 @@ def verify_input(args):
     global GUID_TYPE
     global GUID_prefix
     global Input_csv_filepath
-
+    global destination
+    global bucket
+     
     if not os.path.isdir(args.directory[0]):
-        print("Please enter the correct directory path")
-        exit(0)
+        logger.error("E:Please enter the correct directory path")
+        exit(1)
     else:
         image_dir_path = args.directory[0]
-
+    
     csv_dir = os.path.dirname(os.path.abspath(args.output_csv[0]))
     if os.path.isdir(csv_dir) and not os.path.exists(args.output_csv[0]):
         csv_out_file_path = args.output_csv[0]
     else:
-        print("Please enter corect output CSV File Path")
-        exit(0)
+        logger.error("E:Please enter corect output CSV File Path")
+        exit(2)
 
     GUID_TYPE = args.guid_type[0]
     if args.guid_prefix != None:
@@ -51,9 +56,15 @@ def verify_input(args):
            verify_input_csv(args)
            Input_csv_filepath = args.input_csv[0]
         else:
-            print("please enter valid input csv file")
-            exit(0)   
-
+            logger.error("E:please enter valid input csv file")
+            exit(3)   
+    destination=args.destination[0]
+    if(destination =="S3"):
+        if(args.bucket):
+            bucket=args.bucket[0]
+        else:
+            logger.error("E:please enter valid bucket name in which you want to upload")
+            exit(8) 
    ### VERIFY THE USERS CSV FIELDS ###
 
 
@@ -69,8 +80,8 @@ def verify_input_csv(args):
         i = 0
         for field in lines[0]:
             if field not in fields:
-                print("Enter valid input csv")
-                exit(0)
+                logger.error("E:Enter valid input csv")
+                exit(4)
             else:
                 if field not in excludedfields:
                     input_csv_data[field] = lines[1][i]
@@ -103,11 +114,13 @@ def create_ia_csv(image_files):
     global GUID_prefix
     global input_csv_data
     global persistent_data
+    global image_count
     with open('ia_upload_temp.csv', 'w') as csvfile:
         data = []
         temp = ['identifier', 'file']
         if not input_csv_data:
             data.append(temp)
+            image_count =image_count + 1
         else:
             col = list(input_csv_data.keys())
             temp = temp+col
@@ -137,6 +150,7 @@ def create_ia_csv(image_files):
                 if c in list(input_csv_data.keys()):
                     temp_entry.append(input_csv_data[c])
             data.append(temp_entry)
+            image_count =image_count + 1
         filewriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')
         filewriter.writerows(data)
     csvfile.close()
@@ -144,14 +158,51 @@ def create_ia_csv(image_files):
     pickle.dump(persistent_data, Pfile)
     Pfile.close()
 
-    ### UPLOAD FILES TO INTERNET ARCHIVE ###
+    ### UPLOAD FILES TO AWS S3 ###
+def upload_aws():
+    client= boto3.client('s3')
+    global bucket
+    data = [['idigbio:recordID', 'ac:accessURI','dc:type','dc:format','dc:rights','idigbio:OriginalFileName','ac:hashFunction',
+             'ac:hashValue','idigbio:jsonProperties','idigbio:mediaStatus','idigbio:mediaStatusDate','idigbio:mediaStatusDetail']]
+    global csv_out_file_path
+    bucket_name = bucket
+    with open('ia_upload_temp.csv', 'r') as readFile:
+        reader = csv.reader(readFile)
+        next(reader)
+        check=" "
+        lines = list(reader)
+        for row in lines:
+            filename = row[1]
+            key=row[0]+os.path.splitext(row[1])[1]
+            fm="image/"+os.path.splitext(row[1])[1].replace(".","")
+            try:
+             check=client.upload_file(filename, bucket_name, key,ExtraArgs={'ACL':'public-read'})
+            except Exception as e:
+               logger.error("E:Error while uploading Please verify your aws configuration and try again"+check)  
+               exit(9)
+            file_url='http://%s.s3.amazonaws.com/%s'%(bucket_name,key)
+            hasher = hashlib.md5()
+            with open(row[1], 'rb') as afile:
+                buf = afile.read()
+                hasher.update(buf)       
+            temp_entry = [key, file_url,'StillImage',fm,'CC BY',row[1],'md5',hasher.hexdigest(),"{}",'uploaded',date.today()]
+            data.append(temp_entry)
+            afile.close()
 
+    readFile.close()
+    with open(csv_out_file_path, 'w') as outputfile:
+        filewriter = csv.writer(outputfile, delimiter=',', lineterminator='\n')
+        filewriter.writerows(data)
+    outputfile.close()
 
 def upload_IA():
     cmd = "ia upload --spreadsheet=ia_upload_temp.csv --retries 10"
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     (output, err) = p.communicate()
-    print("Upload Completed")
+    if err:
+       logger.error("E: IA server issue while uploading. Please try again.",err)
+    else:
+        logger.info("Upload Completed")
 
     ### CREATE OUTPUT CSV CONTAINING URI ###
 
@@ -160,6 +211,7 @@ def create_output_csv():
     data = [['idigbio:recordID', 'ac:accessURI','dc:type','dc:format','dc:rights','idigbio:OriginalFileName','ac:hashFunction',
              'ac:hashValue','idigbio:jsonProperties','idigbio:mediaStatus','idigbio:mediaStatusDate','idigbio:mediaStatusDetail']]
     global csv_out_file_path
+    global image_count
     with open('ia_upload_temp.csv', 'r') as readFile:
         reader = csv.reader(readFile)
         lines = list(reader)
@@ -171,9 +223,9 @@ def create_output_csv():
                 metadata_list = json.loads(output.decode("utf-8"))
                 count = 0
                 sleep_time = 0
-                while 'workable_servers' not in metadata_list and count < 5:
+                while 'workable_servers' not in metadata_list and count < 8:
                     count += 1
-                    sleep_time += 2
+                    sleep_time += 4
                     time.sleep(sleep_time)
                     output = subprocess.check_output(cmd)
                     metadata_list = json.loads(output.decode("utf-8"))
@@ -193,9 +245,11 @@ def create_output_csv():
                         hasher.update(buf)       
                    temp_entry = [line[0], uri,'StillImage',fm,'CC BY',line[1],'md5',hasher.hexdigest(),"{}",'uploaded',date.today()]
                    data.append(temp_entry)
+                   image_count=image_count-1
                    afile.close()
                 else:
-                    print("metadata not found for image:-",line[0])
+                    logger.info("W:metadata not found for image:-")
+
     readFile.close()
     with open(csv_out_file_path, 'w') as outputfile:
         filewriter = csv.writer(outputfile, delimiter=',', lineterminator='\n')
@@ -212,12 +266,25 @@ GUID_TYPE = None
 input_csv_data = {}
 persistent_data = {}
 Input_csv_filepath = None
+destination=None
+bucket=None
 image_files = []
-
+image_count=0
+logging.basicConfig(filename="IMUILogs.log", 
+                    format='%(asctime)s %(message)s') 
+logger=logging.getLogger() 
+logger.setLevel(logging.INFO)
 parser = argparse.ArgumentParser(description="IMUI")
 parser.add_argument("-dir", "--directory", type=str, nargs=1,
                     default=None, required=True, metavar="Directory_Path",
                     help="Give the Directory path containing all the image files to upload ")
+parser.add_argument("-des", "--destination", type=str, nargs=1,
+                    default=None, choices=['IA', 'S3'], 
+                    required=True, metavar="Destination_storage",
+                    help="Select one of the following destination storage IA for internet archive or S3 for AWS S3 storage")  
+parser.add_argument("-bucket", "--bucket", type=str, nargs=1,
+                    default=None,  metavar="bucket",
+                    help="Please enter the AWS bucket name in which you want to upload")                                      
 parser.add_argument("-ocsv", "--output_csv", type=str, nargs=1,
                     default=None, required=True, metavar="Output_csv_filepath",
                     help="Give the output csv file name with complete path(file should not exist)")
@@ -235,6 +302,14 @@ verify_input(args)
 loadData()
 scan_dir(image_files)
 create_ia_csv(image_files)
-upload_IA()
-create_output_csv()
-print("\nThanks for using IMUI. Bye.")
+if(destination=='S3'):
+    upload_aws()
+else:
+    upload_IA()
+    create_output_csv()    
+if(destination=='IA'):
+ if(image_count == 1):
+    logger.info("\n S:Upload Successful")
+ else:
+    logger.error("\n Meatadata count didn't match Please try again")
+    exit(5)
