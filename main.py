@@ -18,7 +18,6 @@ import os.path
 
 def display_title_bar():
 
-    os.system('cls')
     logger.info("\t*********************************************")
     logger.info("\t***            Welcome to IMUI            ***")
     logger.info("\t*********************************************")
@@ -160,6 +159,7 @@ def create_ia_csv(image_files):
 
     ### UPLOAD FILES TO AWS S3 ###
 def upload_aws():
+    global image_count
     client= boto3.client('s3')
     global bucket
     data = [['idigbio:recordID', 'ac:accessURI','dc:type','dc:format','dc:rights','idigbio:OriginalFileName','ac:hashFunction',
@@ -187,6 +187,7 @@ def upload_aws():
                 hasher.update(buf)       
             temp_entry = [key, file_url,'StillImage',fm,'CC BY',row[1],'md5',hasher.hexdigest(),"{}",'uploaded',date.today()]
             data.append(temp_entry)
+            image_count=image_count-1
             afile.close()
 
     readFile.close()
@@ -307,9 +308,9 @@ if(destination=='S3'):
 else:
     upload_IA()
     create_output_csv()    
-if(destination=='IA'):
- if(image_count == 1):
+
+if(image_count == 1):
     logger.info("\n S:Upload Successful")
- else:
+else:
     logger.error("\n Meatadata count didn't match Please try again")
     exit(5)
