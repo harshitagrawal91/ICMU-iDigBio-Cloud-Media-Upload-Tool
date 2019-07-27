@@ -19,8 +19,11 @@ import os.path
 def display_title_bar():
 
     logger.info("\t*********************************************")
-    logger.info("\t***            Welcome to IMUI            ***")
+    logger.info("\t***            Welcome to ICMU            ***")
     logger.info("\t*********************************************")
+    print("\t*********************************************")
+    print("\t***            Welcome to ICMU            ***")
+    print("\t*********************************************")
 
 ### VERIFY USERS INPUT ###
 
@@ -33,9 +36,11 @@ def verify_input(args):
     global Input_csv_filepath
     global destination
     global bucket
+    global collection
      
     if not os.path.isdir(args.directory[0]):
         logger.error("E:Please enter the correct directory path")
+        print("E:Please enter the correct directory path")
         exit(1)
     else:
         image_dir_path = args.directory[0]
@@ -45,17 +50,21 @@ def verify_input(args):
         csv_out_file_path = args.output_csv[0]
     else:
         logger.error("E:Please enter corect output CSV File Path")
+        print("E:Please enter corect output CSV File Path")
         exit(2)
 
     GUID_TYPE = args.guid_type[0]
     if args.guid_prefix != None:
         GUID_prefix = args.guid_prefix[0]
+    if(args.collection):
+        collection=args.collection[0]
     if args.input_csv != None:
         if os.path.exists(args.input_csv[0]):
            verify_input_csv(args)
            Input_csv_filepath = args.input_csv[0]
         else:
             logger.error("E:please enter valid input csv file")
+            print("E:please enter valid input csv file")
             exit(3)   
     destination=args.destination[0]
     if(destination =="S3"):
@@ -63,6 +72,7 @@ def verify_input(args):
             bucket=args.bucket[0]
         else:
             logger.error("E:please enter valid bucket name in which you want to upload")
+            print("E:please enter valid bucket name in which you want to upload")
             exit(8) 
    ### VERIFY THE USERS CSV FIELDS ###
 
@@ -70,6 +80,9 @@ def verify_input(args):
 def verify_input_csv(args):
     input_csv_temp = args.input_csv[0]
     global input_csv_data
+    global collection
+    global input_csv_json
+    json_data={}
     fields = {'identifier', 'file', 'mediatype', 'title', 'description', 'creator', 'date',
               'collection', 'recordID', 'accessURI', 'subject[0]', 'subject[1]', 'subject[2]'}
     excludedfields = {'identifier', 'file'}
@@ -80,11 +93,22 @@ def verify_input_csv(args):
         for field in lines[0]:
             if field not in fields:
                 logger.error("E:Enter valid input csv")
+                print("E:Enter valid input csv")
                 exit(4)
             else:
                 if field not in excludedfields:
-                    input_csv_data[field] = lines[1][i]
+                    if field == "collection":
+                       if collection == None:
+                          collection=lines[1][i]
+                       elif collection != lines[1][i]:
+                          logger.error("E:Collection mismatch in command and metadata csv")
+                          print("Collection mismatch in command and metadata csv")
+                          exit(9)      
+                    else:   
+                       input_csv_data[field] = lines[1][i]
+                       json_data[field]=lines[1][i]
                 i += 1
+        input_csv_json=json_data
    ### SCAN DIRECTORY RECURSIVELY AND FIND ALL IMAGE FILES ###
 
 
@@ -114,9 +138,13 @@ def create_ia_csv(image_files):
     global input_csv_data
     global persistent_data
     global image_count
+    global collection
     with open('ia_upload_temp.csv', 'w') as csvfile:
         data = []
         temp = ['identifier', 'file']
+        if collection:
+          col=['collection']
+          temp = temp+col
         if not input_csv_data:
             data.append(temp)
             image_count =image_count + 1
@@ -124,6 +152,7 @@ def create_ia_csv(image_files):
             col = list(input_csv_data.keys())
             temp = temp+col
             data.append(temp)
+            image_count =image_count + 1
         for image_file in image_files:
             id = None
             if image_file in list(persistent_data.keys()):
@@ -145,6 +174,8 @@ def create_ia_csv(image_files):
             temp_entry.append(image_file)
             if image_file not in list(persistent_data.keys()):
                 persistent_data[image_file] = id
+            if collection:
+                 temp_entry.append(collection)   
             for c in temp:
                 if c in list(input_csv_data.keys()):
                     temp_entry.append(input_csv_data[c])
@@ -162,6 +193,7 @@ def upload_aws():
     global image_count
     client= boto3.client('s3')
     global bucket
+    global input_csv_json
     data = [['idigbio:recordID', 'ac:accessURI','dc:type','dc:format','dc:rights','idigbio:OriginalFileName','ac:hashFunction',
              'ac:hashValue','idigbio:jsonProperties','idigbio:mediaStatus','idigbio:mediaStatusDate','idigbio:mediaStatusDetail']]
     global csv_out_file_path
@@ -176,9 +208,13 @@ def upload_aws():
             key=row[0]+os.path.splitext(row[1])[1]
             fm="image/"+os.path.splitext(row[1])[1].replace(".","")
             try:
-             check=client.upload_file(filename, bucket_name, key,ExtraArgs={'ACL':'public-read'})
+             if input_csv_json == None: 
+                check=client.upload_file(filename, bucket_name, key,ExtraArgs={'ACL':'public-read'})
+             else:
+                check=client.upload_file(filename, bucket_name, key,ExtraArgs={'ACL':'public-read',"Metadata":input_csv_json})    
             except Exception as e:
                logger.error("E:Error while uploading Please verify your aws configuration and try again"+check)  
+               print("E:Error while uploading Please verify your aws configuration and try again") 
                exit(9)
             file_url='http://%s.s3.amazonaws.com/%s'%(bucket_name,key)
             hasher = hashlib.md5()
@@ -202,8 +238,10 @@ def upload_IA():
     (output, err) = p.communicate()
     if err:
        logger.error("E: IA server issue while uploading. Please try again.",err)
+       print("E: IA server issue while uploading. Please try again.")
     else:
         logger.info("Upload Completed")
+        print("Upload Completed")
 
     ### CREATE OUTPUT CSV CONTAINING URI ###
 
@@ -250,6 +288,7 @@ def create_output_csv():
                    afile.close()
                 else:
                     logger.info("W:metadata not found for image:-")
+                    print("W:metadata not found for image:-")
 
     readFile.close()
     with open(csv_out_file_path, 'w') as outputfile:
@@ -264,11 +303,13 @@ image_dir_path = None
 csv_out_file_path = None
 GUID_prefix = None
 GUID_TYPE = None
+input_csv_json=None
 input_csv_data = {}
 persistent_data = {}
 Input_csv_filepath = None
 destination=None
 bucket=None
+collection=None
 image_files = []
 image_count=0
 logging.basicConfig(filename="IMUILogs.log", 
@@ -279,13 +320,16 @@ parser = argparse.ArgumentParser(description="IMUI")
 parser.add_argument("-dir", "--directory", type=str, nargs=1,
                     default=None, required=True, metavar="Directory_Path",
                     help="Give the Directory path containing all the image files to upload ")
-parser.add_argument("-des", "--destination", type=str, nargs=1,
+parser.add_argument("-dest", "--destination", type=str, nargs=1,
                     default=None, choices=['IA', 'S3'], 
                     required=True, metavar="Destination_storage",
                     help="Select one of the following destination storage IA for internet archive or S3 for AWS S3 storage")  
 parser.add_argument("-bucket", "--bucket", type=str, nargs=1,
                     default=None,  metavar="bucket",
-                    help="Please enter the AWS bucket name in which you want to upload")                                      
+                    help="Please enter the AWS bucket name in which you want to upload")   
+parser.add_argument("-collection", "--collection", type=str, nargs=1,
+                    default=None,  metavar="bucket",
+                    help="Please enter the IA collection name in which you want to upload")                                                         
 parser.add_argument("-ocsv", "--output_csv", type=str, nargs=1,
                     default=None, required=True, metavar="Output_csv_filepath",
                     help="Give the output csv file name with complete path(file should not exist)")
@@ -304,13 +348,17 @@ loadData()
 scan_dir(image_files)
 create_ia_csv(image_files)
 if(destination=='S3'):
+    print("uploading to S3")
     upload_aws()
 else:
+    print("uploading to IA")
     upload_IA()
     create_output_csv()    
 
 if(image_count == 1):
     logger.info("\n S:Upload Successful")
+    print("Upload Successful")    
 else:
     logger.error("\n Meatadata count didn't match Please try again")
+    print("\n Meatadata count didn't match Please try again")    
     exit(5)
