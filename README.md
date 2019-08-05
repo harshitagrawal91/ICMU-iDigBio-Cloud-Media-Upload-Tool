@@ -37,13 +37,12 @@ sudo pip install internetarchive
 The following instructions are relevant if you plan to upload media to AWS S3; if you plan to upload images to IA, please skip
 
 **3.1** **For Windows clients, using MSI installer:** 
- 
-    1. Download the appropriate MSI installer.
-     1. [Download the AWS CLI MSI installer for Windows (64-bit)](https://s3.amazonaws.com/aws-cli/AWSCLI64PY3.msi)
-     2.	[Download the AWS CLI MSI installer for Windows (32-bit)](https://s3.amazonaws.com/aws-cli/AWSCLI32PY3.msi)
-     3. [Download the AWS CLI setup file (includes both the 32-bit and 64-bit MSI installers and will automatically install the correct version)](https://s3.amazonaws.com/aws-cli/AWSCLISetup.exe)
+  
+   1. [Download the AWS CLI MSI installer for Windows (64-bit)](https://s3.amazonaws.com/aws-cli/AWSCLI64PY3.msi)
+   2.	[Download the AWS CLI MSI installer for Windows (32-bit)](https://s3.amazonaws.com/aws-cli/AWSCLI32PY3.msi)
+   3. [Download the AWS CLI setup file (includes both the 32-bit and 64-bit MSI installers and will automatically install the correct version)](https://s3.amazonaws.com/aws-cli/AWSCLISetup.exe)
      
-        **Note**
+       **Note**
 
         The MSI installer for the AWS CLI doesn't work with Windows Server 2008 (version 6.0.6002). Use [pip](https://docs.aws.amazon.com/cli/latest/userguide/install-windows.html#awscli-install-windows-pip) to install with this version of Windows Server.
   2.	Run the downloaded MSI installer or the setup file.
