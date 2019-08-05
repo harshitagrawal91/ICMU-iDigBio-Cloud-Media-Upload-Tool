@@ -80,7 +80,38 @@ The following instructions are relevant if you plan to upload media to AWS S3; i
  ![](https://github.com/harshitagrawal91/ICMU-iDigBio-Cloud-Media-Upload-Tool/blob/master/images/cloudserver.png)
 
 ## 4. Running ICMU  ##
-
 Run icmu.py with your installed python3. You can either give the complete path or you can set an environment variable. In the example below, an environment variable is already set, so we use the python command to run our script:
 
-**4.1 Command-line arguments:** 
+ **4.1 Command-line arguments:** 
+
+
+ **4.2 Metadata:**
+
+You may provide additional metadata to your uploaded media by specifying the metadate using a CSV file and passing it using -icsv attribute.
+
+The first row of this CSV file should contain all the metadata key names, and the second row must contain values which will be added to all the media. 
+![](https://github.com/harshitagrawal91/ICMU-iDigBio-Cloud-Media-Upload-Tool/blob/master/images/csvformat.png)
+
+**Note:** you can only provide common metadata to all the files. So, the value you will provide in second row of csv will be applied to all the images in that upload.
+
+The CSV should be in Internet Archive metadata csv format. Please refer to the following link for more information:
+[https://help.archive.org/hc/en-us/articles/360018818271-Internet-Archive-Metadata](https://help.archive.org/hc/en-us/articles/360018818271-Internet-Archive-Metadata)
+
+See [metadata.csv](https://archive.org/download/ia-pex/metadata.csv) for an example CSV file
+
+## 5. Example ##
+ 
+*	Suppose you want to upload media stored in a folder named input in the D:\idigbio folder. Note that input may also contain subfolders. Provide the complete folder path in -dir attribute
+* If you want to upload to IA, specify IA after -dest argument (-dest IA) or if you want to upload to S3, specify S3 after -dest argument
+* Now, in -ocsv argument, specify the path where you want to store output csv file. An output csv should not exist in that path. Example:  -ocsv D:\idigibio\output.csv
+* If you want to attach metadata with files, then provide metadata.csv in above mentioned format in -icsv attribute. Example: -icsv D:\idigibio\metadata.csv
+* Please provide guid type and guid prefix in -gt and -gp attribute. Example: -gt prefixuuid -gp ufl
+
+Sample command for uploading in Internet Archive:
+
+python icmu.py -dir D:\idigibio\input -dest IA -ocsv D:\idigibio\output.csv -gt prefixuuid -gp ufl -icsv D:\idigibio\metadata.csv
+
+Sample command for uploading images on AWS S3: -
+
+python icmi.py -dir D:\idigibio\input -dest S3 -bucket ufl -ocsv D:\idigibio\output.csv -gt prefixuuid
+ -gp ufl -icsv D:\idigibio\metadata.csv
